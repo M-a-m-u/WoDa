@@ -1,1 +1,276 @@
 
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WD - Wo & Da</title>
+    
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-title" content="WD Logistik">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+    <style>
+        :root { --primary: #007bff; --bg: #f0f2f5; --card: #ffffff; --text: #333; --success: #28a745; --info: #17a2b8; --warning: #ffc107; --danger: #dc3545; }
+        body { font-family: 'Segoe UI', sans-serif; max-width: 500px; margin: 0 auto; padding: 10px; background: var(--bg); color: var(--text); }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 20px; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 12px; border: none; background: #ddd; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab-btn.active { background: var(--primary); color: white; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; color: var(--primary); font-size: 1.1rem; }
+        button { padding: 12px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: bold; width: 100%; margin-top: 5px; }
+        button.edit { background: var(--warning); color: #333; width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
+        button.delete { background: var(--danger); width: auto; padding: 5px 10px; font-size: 0.8rem; }
+        button.copy { background: var(--success); width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
+        button.info { background: var(--info); width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
+        select, input { padding: 12px; width: 100%; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .scroll-area { max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+        .suggestion-box { border: 1px solid #ddd; background: white; max-height: 150px; overflow-y: auto; display: none; border-radius: 8px; position: absolute; width: calc(100% - 30px); z-index: 10; }
+        .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .suggestion-item:hover { background: #f0f0f0; }
+        .file-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .file-actions button { background: #6c757d; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <h1>WD Logistik</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="showPage('alltag', this)">Alltag</button>
+        <button class="tab-btn" onclick="showPage('verwalten', this)">Verwalten</button>
+    </div>
+
+    <div id="alltag" class="page active">
+        <div class="card">
+            <h2>🔍 Wo ist?</h2>
+            <input type="text" id="searchInput" placeholder="Suchen..." oninput="suche()">
+            <div id="ergebnisListe"></div>
+        </div>
+
+        <div class="card">
+            <h2 id="editItemHeader">📍 Da ist!</h2>
+            <input type="hidden" id="editItemID">
+            <div style="position:relative;">
+                <input type="text" id="itemName" placeholder="Gegenstand eingeben..." oninput="zeigeVorschlaege(this.value)" autocomplete="off">
+                <div id="suggestionBox" class="suggestion-box"></div>
+            </div>
+            <select id="ortSelect"></select>
+            <button id="saveItemBtn" onclick="speichern()">Eintragen / Verschieben</button>
+            <button id="cancelItemEditBtn" style="display:none; background:#6c757d;" onclick="abbruchItemEdit()">Abbrechen</button>
+        </div>
+    </div>
+
+    <div id="verwalten" class="page">
+        <div class="card">
+            <h2 id="editOrtHeader">🏗️ Orte verwalten</h2>
+            <input type="hidden" id="editOrtID">
+            <input type="text" id="newRaum" placeholder="Raum">
+            <input type="text" id="newSchrank" placeholder="Schrank / Regal">
+            <input type="text" id="newFach" placeholder="Ablage / Schublade">
+            <button id="saveOrtBtn" style="background:var(--success)" onclick="ortHinzufuegen()">Ort speichern</button>
+            <button id="cancelOrtEditBtn" style="display:none; background:#6c757d;" onclick="abbruchOrtEdit()">Abbrechen</button>
+            
+            <h3>Bestehende Orte</h3>
+            <div class="scroll-area" id="orteListe"></div>
+        </div>
+
+        <div class="file-actions">
+            <button onclick="datenExportieren()">💾 JSON Export</button>
+            <button onclick="document.getElementById('importFile').click()">📂 JSON Import</button>
+            <input type="file" id="importFile" style="display:none" onchange="datenImportieren(event)" accept=".json">
+        </div>
+    </div>
+
+    <script>
+        let inventar = JSON.parse(localStorage.getItem('wd_inventar')) || [];
+        let orte = JSON.parse(localStorage.getItem('wd_orte')) || [];
+
+        function showPage(pageId, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            btn.classList.add('active');
+            updateUI();
+        }
+
+        async function datenExportieren() {
+            const data = JSON.stringify({ inventar, orte }, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            try {
+                if (window.showSaveFilePicker) {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'wd_logistik.json',
+                        types: [{ description: 'JSON', accept: {'application/json': ['.json']} }]
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = 'wd_logistik.json'; a.click();
+                    URL.revokeObjectURL(url);
+                }
+            } catch (err) {}
+        }
+
+        function datenImportieren(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported.inventar && imported.orte) {
+                        if (confirm("Daten ersetzen?")) {
+                            inventar = imported.inventar; orte = imported.orte;
+                            localStorage.setItem('wd_inventar', JSON.stringify(inventar));
+                            localStorage.setItem('wd_orte', JSON.stringify(orte));
+                            updateUI(); alert("Import fertig!");
+                        }
+                    }
+                } catch (err) { alert("Formatfehler!"); }
+            };
+            reader.readAsText(file);
+        }
+
+        function ortHinzufuegen() {
+            const r = document.getElementById('newRaum').value.trim();
+            const s = document.getElementById('newSchrank').value.trim();
+            const f = document.getElementById('newFach').value.trim();
+            const editID = document.getElementById('editOrtID').value;
+            if (!r || !s) return alert("Raum/Schrank?");
+            if (editID) {
+                let o = orte.find(ort => ort.id === editID);
+                o.raum = r; o.schrank = s; o.fach = f; abbruchOrtEdit();
+            } else {
+                orte.push({ id: "LOC_" + Date.now(), raum: r, schrank: s, fach: f });
+                document.getElementById('newFach').value = ""; document.getElementById('newFach').focus();
+            }
+            saveAndRefresh();
+        }
+
+        function editOrt(id) {
+            const o = orte.find(ort => ort.id === id);
+            document.getElementById('newRaum').value = o.raum;
+            document.getElementById('newSchrank').value = o.schrank;
+            document.getElementById('newFach').value = o.fach;
+            document.getElementById('editOrtID').value = o.id;
+            document.getElementById('editOrtHeader').innerText = "✏️ Ort editieren";
+            document.getElementById('saveOrtBtn').innerText = "Übernehmen";
+            document.getElementById('cancelOrtEditBtn').style.display = "block";
+        }
+
+        function abbruchOrtEdit() {
+            document.getElementById('editOrtID').value = "";
+            document.getElementById('newRaum').value = ""; document.getElementById('newSchrank').value = ""; document.getElementById('newFach').value = "";
+            document.getElementById('editOrtHeader').innerText = "🏗️ Orte verwalten";
+            document.getElementById('saveOrtBtn').innerText = "Ort speichern";
+            document.getElementById('cancelOrtEditBtn').style.display = "none";
+        }
+
+        function speichern() {
+            const n = document.getElementById('itemName').value.trim();
+            const oID = document.getElementById('ortSelect').value;
+            const eID = document.getElementById('editItemID').value;
+            if (!n || !oID) return alert("Name/Ort?");
+            if (eID) {
+                let item = inventar.find(i => i.id === eID);
+                item.name = n; item.ortID = oID; abbruchItemEdit();
+            } else {
+                let ex = inventar.find(i => i.name.toLowerCase() === n.toLowerCase());
+                if (ex) { ex.ortID = oID; alert("Verschoben."); }
+                else { inventar.push({ id: "ITM_" + Date.now(), name: n, ortID: oID }); alert("Neu angelegt."); }
+            }
+            localStorage.setItem('wd_inventar', JSON.stringify(inventar));
+            document.getElementById('itemName').value = "";
+            document.getElementById('suggestionBox').style.display = "none";
+            suche();
+        }
+
+        function editItem(id) {
+            const i = inventar.find(item => item.id === id);
+            document.getElementById('itemName').value = i.name;
+            document.getElementById('ortSelect').value = i.ortID;
+            document.getElementById('editItemID').value = i.id;
+            document.getElementById('editItemHeader').innerText = "✏️ Gegenstand editieren";
+            document.getElementById('saveItemBtn').innerText = "Übernehmen";
+            document.getElementById('cancelItemEditBtn').style.display = "block";
+        }
+
+        function abbruchItemEdit() {
+            document.getElementById('editItemID').value = ""; document.getElementById('itemName').value = "";
+            document.getElementById('editItemHeader').innerText = "📍 Da ist!";
+            document.getElementById('saveItemBtn').innerText = "Eintragen / Verschieben";
+            document.getElementById('cancelItemEditBtn').style.display = "none";
+        }
+
+        function suche() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const l = document.getElementById('ergebnisListe');
+            l.innerHTML = ""; if (q.length < 2) return;
+            inventar.filter(i => i.name.toLowerCase().includes(q)).forEach(t => {
+                const o = orte.find(ort => ort.id === t.ortID);
+                const d = document.createElement('div');
+                d.className = "list-item";
+                d.innerHTML = `<div><strong>${t.name}</strong><br><small>📍 ${o ? o.raum+", "+o.schrank+", "+o.fach : 'Unbekannt'}</small></div>
+                                 <div><button class="edit" onclick="editItem('${t.id}')">✏️</button><button class="delete" onclick="deleteItem('${t.id}')">X</button></div>`;
+                l.appendChild(d);
+            });
+        }
+
+        function zeigeVorschlaege(val) {
+            const b = document.getElementById('suggestionBox');
+            b.innerHTML = ""; if (val.length < 2 || document.getElementById('editItemID').value) { b.style.display = "none"; return; }
+            const tr = inventar.filter(i => i.name.toLowerCase().includes(val.toLowerCase()));
+            if (tr.length > 0) {
+                b.style.display = "block";
+                tr.forEach(t => {
+                    const d = document.createElement('div'); d.className = "suggestion-item"; d.innerText = t.name;
+                    d.onclick = () => { document.getElementById('itemName').value = t.name; b.style.display = "none"; };
+                    b.appendChild(d);
+                });
+            } else { b.style.display = "none"; }
+        }
+
+        function saveAndRefresh() { localStorage.setItem('wd_orte', JSON.stringify(orte)); updateUI(); }
+
+        function updateUI() {
+            const s = document.getElementById('ortSelect');
+            const l = document.getElementById('orteListe');
+            s.innerHTML = ""; l.innerHTML = "";
+            orte.sort((a,b) => a.raum.localeCompare(b.raum) || a.schrank.localeCompare(b.schrank) || a.fach.localeCompare(b.fach)).forEach(o => {
+                const opt = document.createElement('option'); opt.value = o.id; opt.text = `${o.raum} > ${o.schrank} > ${o.fach}`;
+                s.appendChild(opt);
+                const d = document.createElement('div'); d.className = "list-item";
+                d.innerHTML = `<span>${o.raum} > ${o.schrank} > ${o.fach}</span>
+                                 <div><button class="info" onclick="zeigeInhalt('${o.id}')">i</button><button class="edit" onclick="editOrt('${o.id}')">✏️</button><button class="copy" onclick="copyOrt('${o.id}')">S</button><button class="delete" onclick="deleteOrt('${o.id}')">X</button></div>`;
+                l.appendChild(d);
+            });
+        }
+
+        function zeigeInhalt(id) {
+            const inh = inventar.filter(i => i.ortID === id).map(i => i.name);
+            const o = orte.find(ort => ort.id === id);
+            alert(`Inhalt von ${o.raum} > ${o.schrank} > ${o.fach}:\n\n` + (inh.length > 0 ? inh.join("\n") : "Leer"));
+        }
+
+        function deleteOrt(id) { if(confirm("Ort löschen?")) { orte = orte.filter(o => o.id !== id); saveAndRefresh(); } }
+        function deleteItem(id) { if(confirm("Löschen?")) { inventar = inventar.filter(i => i.id !== id); localStorage.setItem('wd_inventar', JSON.stringify(inventar)); suche(); } }
+        function copyOrt(id) {
+            const o = orte.find(ort => ort.id === id);
+            document.getElementById('newRaum').value = o.raum;
+            document.getElementById('newSchrank').value = o.schrank;
+            document.getElementById('newFach').value = "";
+            document.getElementById('newFach').focus();
+        }
+        updateUI();
+    </script>
+</body>
+</html>
