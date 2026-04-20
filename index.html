@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -99,8 +98,9 @@
             updateUI();
         }
 
+        // --- INTELLIGENTE MERGE-LOGIK ---
         async function datenExportieren() {
-            const data = JSON.stringify({ inventar, orte }, null, 2);
+            const data = JSON.stringify({ inventar, orte, exportDate: Date.now() }, null, 2);
             const blob = new Blob([data], { type: 'application/json' });
             try {
                 if (window.showSaveFilePicker) {
@@ -127,35 +127,113 @@
             reader.onload = function(e) {
                 try {
                     const imported = JSON.parse(e.target.result);
-                    if (imported.inventar && imported.orte) {
-                        if (confirm("Daten ersetzen?")) {
-                            inventar = imported.inventar; orte = imported.orte;
-                            localStorage.setItem('wd_inventar', JSON.stringify(inventar));
-                            localStorage.setItem('wd_orte', JSON.stringify(orte));
-                            updateUI(); alert("Import fertig!");
-                        }
+                    if (!imported.inventar || !imported.orte) {
+                        alert("Ungültiges Dateiformat!");
+                        return;
                     }
+
+                    const mode = confirm("Daten ZUSAMMENFÜHREN? (OK klicken)\n\nOder bestehende Daten komplett ÜBERSCHREIBEN? (Abbrechen klicken)");
+                    
+                    if (mode) {
+                        // MERGE ORTE
+                        imported.orte.forEach(newOrt => {
+                            let idx = orte.findIndex(o => o.id === newOrt.id);
+                            if (idx === -1) {
+                                orte.push(newOrt);
+                            } else {
+                                if (!orte[idx].lastModified || (newOrt.lastModified > orte[idx].lastModified)) {
+                                    orte[idx] = newOrt;
+                                }
+                            }
+                        });
+
+                        // MERGE INVENTAR
+                        imported.inventar.forEach(newItem => {
+                            let idx = inventar.findIndex(i => i.id === newItem.id);
+                            if (idx === -1) {
+                                inventar.push(newItem);
+                            } else {
+                                if (!inventar[idx].lastModified || (newItem.lastModified > inventar[idx].lastModified)) {
+                                    inventar[idx] = newItem;
+                                }
+                            }
+                        });
+                        alert("Daten erfolgreich zusammengeführt!");
+                    } else {
+                        inventar = imported.inventar;
+                        orte = imported.orte;
+                        alert("Daten wurden komplett ersetzt.");
+                    }
+                    
+                    localStorage.setItem('wd_inventar', JSON.stringify(inventar));
+                    localStorage.setItem('wd_orte', JSON.stringify(orte));
+                    updateUI();
                 } catch (err) { alert("Formatfehler!"); }
             };
             reader.readAsText(file);
         }
 
+        // --- STANDARDFUNKTIONEN MIT ZEITSTEMPEL ---
         function ortHinzufuegen() {
             const r = document.getElementById('newRaum').value.trim();
             const s = document.getElementById('newSchrank').value.trim();
             const f = document.getElementById('newFach').value.trim();
             const editID = document.getElementById('editOrtID').value;
             if (!r || !s) return alert("Raum/Schrank?");
+            
             if (editID) {
                 let o = orte.find(ort => ort.id === editID);
-                o.raum = r; o.schrank = s; o.fach = f; abbruchOrtEdit();
+                o.raum = r; o.schrank = s; o.fach = f;
+                o.lastModified = Date.now();
+                abbruchOrtEdit();
             } else {
-                orte.push({ id: "LOC_" + Date.now(), raum: r, schrank: s, fach: f });
+                orte.push({ 
+                    id: "LOC_" + Date.now(), 
+                    raum: r, 
+                    schrank: s, 
+                    fach: f,
+                    lastModified: Date.now()
+                });
                 document.getElementById('newFach').value = ""; document.getElementById('newFach').focus();
             }
             saveAndRefresh();
         }
 
+        function speichern() {
+            const n = document.getElementById('itemName').value.trim();
+            const oID = document.getElementById('ortSelect').value;
+            const eID = document.getElementById('editItemID').value;
+            if (!n || !oID) return alert("Name/Ort?");
+            
+            if (eID) {
+                let item = inventar.find(i => i.id === eID);
+                item.name = n; item.ortID = oID;
+                item.lastModified = Date.now();
+                abbruchItemEdit();
+            } else {
+                let ex = inventar.find(i => i.name.toLowerCase() === n.toLowerCase());
+                if (ex) { 
+                    ex.ortID = oID; 
+                    ex.lastModified = Date.now();
+                    alert("Verschoben."); 
+                }
+                else { 
+                    inventar.push({ 
+                        id: "ITM_" + Date.now(), 
+                        name: n, 
+                        ortID: oID,
+                        lastModified: Date.now()
+                    }); 
+                    alert("Neu angelegt."); 
+                }
+            }
+            localStorage.setItem('wd_inventar', JSON.stringify(inventar));
+            document.getElementById('itemName').value = "";
+            document.getElementById('suggestionBox').style.display = "none";
+            suche();
+        }
+
+        // --- HELFER (UNVERÄNDERT) ---
         function editOrt(id) {
             const o = orte.find(ort => ort.id === id);
             document.getElementById('newRaum').value = o.raum;
@@ -173,25 +251,6 @@
             document.getElementById('editOrtHeader').innerText = "🏗️ Orte verwalten";
             document.getElementById('saveOrtBtn').innerText = "Ort speichern";
             document.getElementById('cancelOrtEditBtn').style.display = "none";
-        }
-
-        function speichern() {
-            const n = document.getElementById('itemName').value.trim();
-            const oID = document.getElementById('ortSelect').value;
-            const eID = document.getElementById('editItemID').value;
-            if (!n || !oID) return alert("Name/Ort?");
-            if (eID) {
-                let item = inventar.find(i => i.id === eID);
-                item.name = n; item.ortID = oID; abbruchItemEdit();
-            } else {
-                let ex = inventar.find(i => i.name.toLowerCase() === n.toLowerCase());
-                if (ex) { ex.ortID = oID; alert("Verschoben."); }
-                else { inventar.push({ id: "ITM_" + Date.now(), name: n, ortID: oID }); alert("Neu angelegt."); }
-            }
-            localStorage.setItem('wd_inventar', JSON.stringify(inventar));
-            document.getElementById('itemName').value = "";
-            document.getElementById('suggestionBox').style.display = "none";
-            suche();
         }
 
         function editItem(id) {
@@ -244,6 +303,7 @@
         function updateUI() {
             const s = document.getElementById('ortSelect');
             const l = document.getElementById('orteListe');
+            if (!s || !l) return;
             s.innerHTML = ""; l.innerHTML = "";
             orte.sort((a,b) => a.raum.localeCompare(b.raum) || a.schrank.localeCompare(b.schrank) || a.fach.localeCompare(b.fach)).forEach(o => {
                 const opt = document.createElement('option'); opt.value = o.id; opt.text = `${o.raum} > ${o.schrank} > ${o.fach}`;
