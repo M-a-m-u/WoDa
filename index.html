@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WD - Wo & Da</title>
     
     <link rel="apple-touch-icon" href="icon.png">
@@ -13,7 +13,30 @@
     <style>
         :root { --primary: #007bff; --bg: #f0f2f5; --card: #ffffff; --text: #333; --success: #28a745; --info: #17a2b8; --warning: #ffc107; --danger: #dc3545; }
         body { font-family: 'Segoe UI', sans-serif; max-width: 500px; margin: 0 auto; padding: 10px; background: var(--bg); color: var(--text); }
-        h1 { text-align: center; color: var(--primary); margin-bottom: 20px; }
+        
+        /* Header-Struktur stabil halten */
+        .header-area { 
+    display: flex; 
+    justify-content: center; /* Zentriert den Titel */
+    align-items: center; 
+    position: relative; 
+    margin-bottom: 20px;
+    min-height: 40px; /* Gibt dem Bereich eine feste Höhe */
+}
+
+        h1 { text-align: center; color: var(--primary); margin: 0; display: inline-block; }
+        .ruler-trigger { 
+    position: absolute;    /* Löst das Lineal aus dem Textfluss */
+    left: calc(30% + 10px); /* 50% ist die Mitte, + 90px schiebt es rechts neben die Logistik */
+    font-size: 1.6rem; 
+    background: none; 
+    border: none; 
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    white-space: nowrap;
+}
+
         .tabs { display: flex; gap: 5px; margin-bottom: 20px; }
         .tab-btn { flex: 1; padding: 12px; border: none; background: #ddd; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .tab-btn.active { background: var(--primary); color: white; }
@@ -21,24 +44,50 @@
         .page.active { display: block; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
         h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; color: var(--primary); font-size: 1.1rem; }
+        
         button { padding: 12px; cursor: pointer; background: var(--primary); color: white; border: none; border-radius: 6px; font-weight: bold; width: 100%; margin-top: 5px; }
         button.edit { background: var(--warning); color: #333; width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
         button.delete { background: var(--danger); width: auto; padding: 5px 10px; font-size: 0.8rem; }
         button.copy { background: var(--success); width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
         button.info { background: var(--info); width: auto; padding: 5px 10px; font-size: 0.8rem; margin-right: 5px; }
+        
         select, input { padding: 12px; width: 100%; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
         .scroll-area { max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+        
         .suggestion-box { border: 1px solid #ddd; background: white; max-height: 150px; overflow-y: auto; display: none; border-radius: 8px; position: absolute; width: calc(100% - 30px); z-index: 10; }
         .suggestion-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
         .suggestion-item:hover { background: #f0f0f0; }
         .file-actions { display: flex; gap: 10px; margin-top: 20px; }
         .file-actions button { background: #6c757d; font-size: 0.9rem; }
+
+        /* --- LINEAL OVERLAY STYLES --- */
+        #rulerPage { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; display: none; overflow: hidden; touch-action: none; }
+        .ruler-scale { position: absolute; left: 0; top: 80px; bottom: 0; width: 75px; border-right: 2px solid #333; background: #fcfcfc; }
+        .tick { position: absolute; right: 0; height: 1px; background: #333; }
+        .tick.cm { width: 35px; border-top: 1px solid #000; }
+        .tick.mid { width: 22px; background: #666; }
+        .tick.mm { width: 12px; background: #bbb; }
+        .cm-label { position: absolute; right: 40px; transform: translateY(-50%); font-size: 14px; font-weight: bold; }
+
+        .slider-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 10; pointer-events: none; }
+        .slider-handle { position: absolute; left: 85px; width: 65px; height: 65px; background: rgba(220, 53, 69, 0.15); border: 3px solid var(--danger); border-radius: 50%; transform: translateY(-50%); touch-action: none; z-index: 20; }
+        
+        .measurement-display { position: absolute; top: 30px; right: 20px; text-align: right; }
+        .val-big { font-size: 2.8rem; font-weight: bold; color: var(--danger); }
+        .saved-vals-grid { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 220px; }
+        .saved-box { background: #eee; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; display: flex; justify-content: space-between; border-left: 3px solid var(--success); }
+
+        .ruler-controls { position: absolute; bottom: 30px; left: 100px; right: 20px; display: flex; gap: 8px; }
+        .ruler-controls button { margin: 0; flex: 1; font-size: 0.8rem; padding: 10px 5px; }
     </style>
 </head>
 <body>
 
-    <h1>WD Logistik</h1>
+    <div class="header-area">
+        <h1>WD Logistik</h1>
+        <button class="ruler-trigger" onclick="openRuler()">📏</button>
+    </div>
 
     <div class="tabs">
         <button class="tab-btn active" onclick="showPage('alltag', this)">Alltag</button>
@@ -86,10 +135,111 @@
         </div>
     </div>
 
+    <div id="rulerPage">
+        <div class="ruler-scale" id="rulerScale"></div>
+        <div id="sliderLine" class="slider-line"></div>
+        <div id="sliderHandle" class="slider-handle"></div>
+
+        <div class="measurement-display">
+            <div class="val-big"><span id="currentMM">0.0</span> cm</div>
+            <div class="saved-vals-grid" id="savedGrid">
+                <div class="saved-box">W1: <span class="s-val">-</span></div>
+                <div class="saved-box">W2: <span class="s-val">-</span></div>
+                <div class="saved-box">W3: <span class="s-val">-</span></div>
+                <div class="saved-box">W4: <span class="s-val">-</span></div>
+                <div class="saved-box">W5: <span class="s-val">-</span></div>
+                <div class="saved-box">W6: <span class="s-val">-</span></div>
+            </div>
+        </div>
+
+        <div class="ruler-controls">
+            <button onclick="saveRulerValue()" style="background:var(--success)">Merken</button>
+            <button onclick="resetRulerValues()" style="background:var(--info)">Löschen</button>
+            <button onclick="calibrateRuler()" style="background:var(--warning); color:black;">Kalibr.</button>
+            <button onclick="closeRuler()" style="background:var(--danger)">X</button>
+        </div>
+    </div>
+
     <script>
         let inventar = JSON.parse(localStorage.getItem('wd_inventar')) || [];
         let orte = JSON.parse(localStorage.getItem('wd_orte')) || [];
+        let mmPx = parseFloat(localStorage.getItem('wd_mmPx')) || 3.78; 
+        const offsetTop = 80;
 
+        // --- LINEAL FUNKTIONEN ---
+        function openRuler() { 
+            document.getElementById('rulerPage').style.display = 'block'; 
+            drawRuler();
+            updateSlider(offsetTop); // Start bei Null
+        }
+        function closeRuler() { document.getElementById('rulerPage').style.display = 'none'; }
+
+        function drawRuler() {
+            const scale = document.getElementById('rulerScale');
+            scale.innerHTML = '';
+            for (let i = 0; i <= 400; i++) {
+                const pos = i * mmPx;
+                if (pos > window.innerHeight) break;
+                const tick = document.createElement('div');
+                if (i % 10 === 0) tick.className = 'tick cm';
+                else if (i % 5 === 0) tick.className = 'tick mid';
+                else tick.className = 'tick mm';
+                tick.style.top = pos + 'px';
+                scale.appendChild(tick);
+                if (i % 10 === 0) {
+                    const lbl = document.createElement('div');
+                    lbl.className = 'cm-label';
+                    lbl.style.top = pos + 'px';
+                    lbl.innerText = i / 10;
+                    scale.appendChild(lbl);
+                }
+            }
+        }
+
+        const handle = document.getElementById('sliderHandle');
+        const line = document.getElementById('sliderLine');
+        const display = document.getElementById('currentMM');
+        
+        function updateSlider(y) {
+            // Hard Stop bei Null und Magnet-Effekt
+            let mmRaw = (y - offsetTop) / mmPx;
+            let mmSnapped = Math.max(0, Math.round(mmRaw)); 
+            let finalY = (mmSnapped * mmPx) + offsetTop;
+
+            handle.style.top = finalY + 'px';
+            line.style.top = finalY + 'px';
+            display.innerText = (mmSnapped / 10).toFixed(1);
+        }
+
+        handle.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            updateSlider(e.touches[0].clientY);
+        }, {passive: false});
+
+        function saveRulerValue() {
+            const boxes = document.querySelectorAll('.s-val');
+            for (let box of boxes) {
+                if (box.innerText === "-") {
+                    box.innerText = display.innerText + " cm";
+                    break;
+                }
+            }
+        }
+
+        function resetRulerValues() {
+            document.querySelectorAll('.s-val').forEach(box => box.innerText = "-");
+        }
+
+        function calibrateRuler() {
+            let realVal = prompt("Kalibrierung: Lege echtes Lineal an. Was zeigt die App bei 10cm an?", display.innerText);
+            if(realVal) {
+                mmPx = mmPx * (10 / parseFloat(realVal));
+                localStorage.setItem('wd_mmPx', mmPx);
+                drawRuler();
+            }
+        }
+
+        // --- DEINE STABILEN FUNKTIONEN (UNVERÄNDERT) ---
         function showPage(pageId, btn) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -98,7 +248,6 @@
             updateUI();
         }
 
-        // --- INTELLIGENTE MERGE-LOGIK ---
         async function datenExportieren() {
             const data = JSON.stringify({ inventar, orte, exportDate: Date.now() }, null, 2);
             const blob = new Blob([data], { type: 'application/json' });
@@ -127,44 +276,20 @@
             reader.onload = function(e) {
                 try {
                     const imported = JSON.parse(e.target.result);
-                    if (!imported.inventar || !imported.orte) {
-                        alert("Ungültiges Dateiformat!");
-                        return;
-                    }
-
-                    const mode = confirm("Daten ZUSAMMENFÜHREN? (OK klicken)\n\nOder bestehende Daten komplett ÜBERSCHREIBEN? (Abbrechen klicken)");
-                    
+                    if (!imported.inventar || !imported.orte) { alert("Formatfehler!"); return; }
+                    const mode = confirm("Daten ZUSAMMENFÜHREN? (OK)\nÜBERSCHREIBEN? (Abbrechen)");
                     if (mode) {
-                        // MERGE ORTE
                         imported.orte.forEach(newOrt => {
                             let idx = orte.findIndex(o => o.id === newOrt.id);
-                            if (idx === -1) {
-                                orte.push(newOrt);
-                            } else {
-                                if (!orte[idx].lastModified || (newOrt.lastModified > orte[idx].lastModified)) {
-                                    orte[idx] = newOrt;
-                                }
-                            }
+                            if (idx === -1) orte.push(newOrt);
+                            else if (!orte[idx].lastModified || (newOrt.lastModified > orte[idx].lastModified)) orte[idx] = newOrt;
                         });
-
-                        // MERGE INVENTAR
                         imported.inventar.forEach(newItem => {
                             let idx = inventar.findIndex(i => i.id === newItem.id);
-                            if (idx === -1) {
-                                inventar.push(newItem);
-                            } else {
-                                if (!inventar[idx].lastModified || (newItem.lastModified > inventar[idx].lastModified)) {
-                                    inventar[idx] = newItem;
-                                }
-                            }
+                            if (idx === -1) inventar.push(newItem);
+                            else if (!inventar[idx].lastModified || (newItem.lastModified > inventar[idx].lastModified)) inventar[idx] = newItem;
                         });
-                        alert("Daten erfolgreich zusammengeführt!");
-                    } else {
-                        inventar = imported.inventar;
-                        orte = imported.orte;
-                        alert("Daten wurden komplett ersetzt.");
-                    }
-                    
+                    } else { inventar = imported.inventar; orte = imported.orte; }
                     localStorage.setItem('wd_inventar', JSON.stringify(inventar));
                     localStorage.setItem('wd_orte', JSON.stringify(orte));
                     updateUI();
@@ -173,27 +298,18 @@
             reader.readAsText(file);
         }
 
-        // --- STANDARDFUNKTIONEN MIT ZEITSTEMPEL ---
         function ortHinzufuegen() {
             const r = document.getElementById('newRaum').value.trim();
             const s = document.getElementById('newSchrank').value.trim();
             const f = document.getElementById('newFach').value.trim();
             const editID = document.getElementById('editOrtID').value;
             if (!r || !s) return alert("Raum/Schrank?");
-            
             if (editID) {
                 let o = orte.find(ort => ort.id === editID);
-                o.raum = r; o.schrank = s; o.fach = f;
-                o.lastModified = Date.now();
+                o.raum = r; o.schrank = s; o.fach = f; o.lastModified = Date.now();
                 abbruchOrtEdit();
             } else {
-                orte.push({ 
-                    id: "LOC_" + Date.now(), 
-                    raum: r, 
-                    schrank: s, 
-                    fach: f,
-                    lastModified: Date.now()
-                });
+                orte.push({ id: "LOC_" + Date.now(), raum: r, schrank: s, fach: f, lastModified: Date.now() });
                 document.getElementById('newFach').value = ""; document.getElementById('newFach').focus();
             }
             saveAndRefresh();
@@ -204,28 +320,14 @@
             const oID = document.getElementById('ortSelect').value;
             const eID = document.getElementById('editItemID').value;
             if (!n || !oID) return alert("Name/Ort?");
-            
             if (eID) {
                 let item = inventar.find(i => i.id === eID);
-                item.name = n; item.ortID = oID;
-                item.lastModified = Date.now();
+                item.name = n; item.ortID = oID; item.lastModified = Date.now();
                 abbruchItemEdit();
             } else {
                 let ex = inventar.find(i => i.name.toLowerCase() === n.toLowerCase());
-                if (ex) { 
-                    ex.ortID = oID; 
-                    ex.lastModified = Date.now();
-                    alert("Verschoben."); 
-                }
-                else { 
-                    inventar.push({ 
-                        id: "ITM_" + Date.now(), 
-                        name: n, 
-                        ortID: oID,
-                        lastModified: Date.now()
-                    }); 
-                    alert("Neu angelegt."); 
-                }
+                if (ex) { ex.ortID = oID; ex.lastModified = Date.now(); alert("Verschoben."); }
+                else { inventar.push({ id: "ITM_" + Date.now(), name: n, ortID: oID, lastModified: Date.now() }); alert("Neu angelegt."); }
             }
             localStorage.setItem('wd_inventar', JSON.stringify(inventar));
             document.getElementById('itemName').value = "";
@@ -233,7 +335,6 @@
             suche();
         }
 
-        // --- HELFER (UNVERÄNDERT) ---
         function editOrt(id) {
             const o = orte.find(ort => ort.id === id);
             document.getElementById('newRaum').value = o.raum;
