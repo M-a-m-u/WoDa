@@ -80,6 +80,74 @@
 
         .ruler-controls { position: absolute; bottom: 30px; left: 100px; right: 20px; display: flex; gap: 8px; }
         .ruler-controls button { margin: 0; flex: 1; font-size: 0.8rem; padding: 10px 5px; }
+
+        /* Styling für die Raum-Gruppe */
+.raum-gruppe {
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.raum-header {
+    background: #e9ecef !important; /* Grauer Balken */
+    padding: 12px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ccc;
+    -webkit-tap-highlight-color: transparent;
+}
+.raum-content {
+    display: none; /* Erstmal alles verstecken */
+    padding: 5px;
+    background: white;
+}
+.raum-content.active {
+    display: block !important; /* Nur zeigen, wenn 'active' gesetzt ist */
+}
+
+/* Die Box für die Ort-Auswahl im Alltag */
+#ortWahlContainer {
+    margin-top: 10px;
+    border: 1px solid #007bff;
+    border-radius: 8px;
+    background: #fff;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.wahl-raum-header {
+    background: #f0f2f5;
+    padding: 12px;
+    font-weight: bold;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+}
+.wahl-raum-content {
+    display: none; /* Erstmal zu */
+    background: #fff;
+}
+.wahl-ort-item {
+    padding: 10px 20px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+.wahl-ort-item:active { background: #e7f3ff; }
+.gewaehlter-ort-info {
+    padding: 10px;
+    background: #e7f3ff;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #007bff;
+    border: 1px solid #007bff;
+}
+
+
+
     </style>
 </head>
 <body>
@@ -94,7 +162,7 @@
         <button class="tab-btn" onclick="showPage('verwalten', this)">Verwalten</button>
     </div>
 
-    <div id="alltag" class="page active">
+        <div id="alltag" class="page active">
         <div class="card">
             <h2>🔍 Wo ist?</h2>
             <input type="text" id="searchInput" placeholder="Suchen..." oninput="suche()">
@@ -104,15 +172,26 @@
         <div class="card">
             <h2 id="editItemHeader">📍 Da ist!</h2>
             <input type="hidden" id="editItemID">
+            
             <div style="position:relative;">
                 <input type="text" id="itemName" placeholder="Gegenstand eingeben..." oninput="zeigeVorschlaege(this.value)" autocomplete="off">
                 <div id="suggestionBox" class="suggestion-box"></div>
             </div>
-            <select id="ortSelect"></select>
-            <button id="saveItemBtn" onclick="speichern()">Eintragen / Verschieben</button>
+
+            <div id="selectedOrtDisplay" style="padding: 10px; background: #e7f3ff; border-radius: 8px; margin-bottom: 5px; font-weight: bold; color: #007bff; border: 1px solid #007bff; font-size: 0.9rem;">
+                Bitte Ort unten wählen...
+            </div>
+            
+            <input type="hidden" id="ortSelect">
+
+            <div id="ortWahlContainer" style="border: 1px solid #ddd; border-radius: 8px; max-height: 250px; overflow-y: auto; background: #fff;">
+                </div>
+
+            <button id="saveItemBtn" onclick="speichern()" style="margin-top: 15px;">Eintragen / Verschieben</button>
             <button id="cancelItemEditBtn" style="display:none; background:#6c757d;" onclick="abbruchItemEdit()">Abbrechen</button>
         </div>
     </div>
+
 
     <div id="verwalten" class="page">
         <div class="card">
@@ -402,19 +481,92 @@
         function saveAndRefresh() { localStorage.setItem('wd_orte', JSON.stringify(orte)); updateUI(); }
 
         function updateUI() {
-            const s = document.getElementById('ortSelect');
-            const l = document.getElementById('orteListe');
-            if (!s || !l) return;
-            s.innerHTML = ""; l.innerHTML = "";
-            orte.sort((a,b) => a.raum.localeCompare(b.raum) || a.schrank.localeCompare(b.schrank) || a.fach.localeCompare(b.fach)).forEach(o => {
-                const opt = document.createElement('option'); opt.value = o.id; opt.text = `${o.raum} > ${o.schrank} > ${o.fach}`;
-                s.appendChild(opt);
-                const d = document.createElement('div'); d.className = "list-item";
-                d.innerHTML = `<span>${o.raum} > ${o.schrank} > ${o.fach}</span>
-                                 <div><button class="info" onclick="zeigeInhalt('${o.id}')">i</button><button class="edit" onclick="editOrt('${o.id}')">✏️</button><button class="copy" onclick="copyOrt('${o.id}')">S</button><button class="delete" onclick="deleteOrt('${o.id}')">X</button></div>`;
-                l.appendChild(d);
-            });
-        }
+    const wahlContainer = document.getElementById('ortWahlContainer'); // Alltag Auswahl
+    const l = document.getElementById('orteListe'); // Verwalten Liste
+    const s = document.getElementById('ortSelect'); // Hidden Field oder altes Select
+    
+    if (!wahlContainer || !l) return;
+    wahlContainer.innerHTML = "";
+    l.innerHTML = "";
+
+    // 1. Daten nach Räumen gruppieren
+    const gruppiert = {};
+    orte.forEach(o => {
+        if (!gruppiert[o.raum]) gruppiert[o.raum] = [];
+        gruppiert[o.raum].push(o);
+    });
+
+    // 2. Sortierte Räume durchgehen
+    Object.keys(gruppiert).sort().forEach(raumName => {
+        
+        // --- BEREICH A: ALLTAG (RAUM-WAHL BOX) ---
+        const wahlWrapper = document.createElement('div');
+        wahlWrapper.className = "raum-gruppe";
+        wahlWrapper.innerHTML = `
+            <div class="raum-header" style="background:#e9ecef; padding:10px; cursor:pointer; font-weight:bold; border-bottom:1px solid #ddd;">
+                <span>🏠 ${raumName}</span> <span>▼</span>
+            </div>
+            <div class="wahl-content" style="display:none; background:white;"></div>
+        `;
+        
+        const wHeader = wahlWrapper.querySelector('.raum-header');
+        const wContent = wahlWrapper.querySelector('.wahl-content');
+        
+        wHeader.onclick = () => {
+            const isOpen = wContent.style.display === "block";
+            wContent.style.display = isOpen ? "none" : "block";
+            wHeader.querySelector('span:last-child').innerText = isOpen ? "▼" : "▲";
+        };
+
+        gruppiert[raumName].sort((a,b) => a.schrank.localeCompare(b.schrank)).forEach(o => {
+            const item = document.createElement('div');
+            item.className = "list-item";
+            item.style.cursor = "pointer";
+            item.innerText = `${o.schrank} > ${o.fach}`;
+            item.onclick = () => {
+                document.getElementById('ortSelect').value = o.id;
+                document.getElementById('selectedOrtDisplay').innerText = `Gewählt: ${raumName} > ${o.schrank}`;
+                wContent.style.display = "none"; // Zuklappen nach Wahl
+            };
+            wContent.appendChild(item);
+        });
+        wahlContainer.appendChild(wahlWrapper);
+
+        // --- BEREICH B: VERWALTEN (BESTEHENDE ORTE MIT ALLEN BUTTONS) ---
+        const verwaltWrapper = document.createElement('div');
+        verwaltWrapper.className = "raum-gruppe";
+        verwaltWrapper.innerHTML = `
+            <div class="raum-header" style="background:#f0f2f5; padding:10px; cursor:pointer; font-weight:bold; border-bottom:1px solid #ddd;">
+                <span>🏠 ${raumName} (Verwalten)</span> <span>▼</span>
+            </div>
+            <div class="verwalt-content" style="display:none; background:white;"></div>
+        `;
+
+        const vHeader = verwaltWrapper.querySelector('.raum-header');
+        const vContent = verwaltWrapper.querySelector('.verwalt-content');
+
+        vHeader.onclick = () => {
+            const isOpen = vContent.style.display === "block";
+            vContent.style.display = isOpen ? "none" : "block";
+        };
+
+        gruppiert[raumName].forEach(o => {
+            const d = document.createElement('div');
+            d.className = "list-item";
+            d.innerHTML = `
+                <span>${o.schrank} > ${o.fach}</span>
+                <div>
+                    <button class="info" onclick="zeigeInhalt('${o.id}')">i</button>
+                    <button class="edit" onclick="editOrt('${o.id}')">✏️</button>
+                    <button class="copy" onclick="copyOrt('${o.id}')">S</button>
+                    <button class="delete" onclick="deleteOrt('${o.id}')">X</button>
+                </div>`;
+            vContent.appendChild(d);
+        });
+        l.appendChild(verwaltWrapper);
+    });
+}
+
 
         function zeigeInhalt(id) {
             const inh = inventar.filter(i => i.ortID === id).map(i => i.name);
@@ -432,6 +584,22 @@
             document.getElementById('newFach').focus();
         }
         updateUI();
+
+        function toggleRaum(element) {
+    // Findet den Inhaltsbereich direkt unter dem angeklickten Header
+    const content = element.nextElementSibling;
+    content.classList.toggle('active');
+    
+    // Pfeil ändern
+    const arrow = element.querySelector('small');
+    if (content.classList.contains('active')) {
+        arrow.innerText = '▲';
+    } else {
+        arrow.innerText = '▼';
+    }
+}
+
+
     </script>
 </body>
 </html>
